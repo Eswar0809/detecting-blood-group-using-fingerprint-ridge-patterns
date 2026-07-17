@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fingerprint Blood Group Prediction</title>
+  <style>
+    :root {
+      --bg: #111;
+      --panel: rgba(3, 218, 197, 0.05);
+      --border: rgba(3, 218, 197, 0.2);
+      --text: #fff;
+      --muted: #999;
+      --accent: #03dac5;
+      --danger: #ff4444;
+      --success: #44ff44;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      padding: 24px 16px;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      display: grid;
+      gap: 16px;
+    }
+
+    .card {
+      padding: 20px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+    }
+
+    h1 {
+      margin: 0;
+      color: var(--accent);
+      text-align: center;
+    }
+
+    .subtitle {
+      margin: 8px 0 0;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      color: var(--accent);
+      font-size: 1.2rem;
+    }
+
+    input[type="file"] {
+      width: 100%;
+      padding: 12px;
+      color: var(--text);
+      background: rgba(3, 218, 197, 0.1);
+      border: 2px dashed var(--accent);
+      border-radius: 8px;
+    }
+
+    .actions { margin-top: 12px; }
+
+    button {
+      border: none;
+      border-radius: 8px;
+      padding: 12px 24px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      background: var(--accent);
+      color: #000;
+    }
+
+    #message {
+      margin-top: 10px;
+      min-height: 20px;
+      color: var(--danger);
+    }
+
+    #pipeline { display: none; }
+    #pipeline.show { display: block; }
+
+    .timeline {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .stage { color: var(--muted); }
+    .stage.active { color: var(--accent); font-weight: 700; }
+
+    .progress-wrap {
+      width: 100%;
+      height: 12px;
+      border-radius: 99px;
+      background: #333;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), #00bfa5);
+      transition: width 0.6s ease;
+    }
+
+    #resultCard { display: none; }
+
+    .badge {
+      display: inline-block;
+      margin-top: 6px;
+      font-size: 2.2rem;
+      color: var(--accent);
+      font-weight: 800;
+    }
+
+    .meta { color: var(--muted); margin: 8px 0; }
+
+    #previewWrap { display: none; margin-top: 12px; }
+    #previewImage {
+      max-width: 260px;
+      width: 100%;
+      border-radius: 10px;
+      border: 2px solid var(--accent);
+    }
+
+    .history-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: 8px;
+    }
+
+    .history-list li {
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.04);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>Fingerprint Blood Group Prediction</h1>
+      <p class="subtitle">Upload one fingerprint image to predict blood group with confidence.</p>
+    </div>
+
+    <div class="card" id="buttonWrapper">
+      <h2>Upload Fingerprint</h2>
+      <input type="file" id="fileInput" accept=".png,.jpg,.jpeg,.bmp,.gif" />
+      <div class="actions">
+        <button id="predictBtn" onclick="triggerPredict()">Analyze & Predict</button>
+      </div>
+      <div id="message"></div>
+    </div>
+
+    <div class="card" id="pipeline">
+      <div class="timeline">
+        <span class="stage" id="stage1">Preprocessing</span>
+        <span class="stage" id="stage2">Feature Extraction</span>
+        <span class="stage" id="stage3">Model Analysis</span>
+        <span class="stage" id="stage4">Prediction</span>
+      </div>
+      <div class="progress-wrap"><div id="progress" class="progress-bar"></div></div>
+    </div>
+
+    <div class="card" id="resultCard">
+      <h2>Prediction Result</h2>
+      <div id="predictionLabel" class="badge">-</div>
+      <div id="resultMeta" class="meta"></div>
+      <div id="confidenceInfo" class="meta"></div>
+      <div id="previewWrap">
+        <img id="previewImage" alt="Uploaded fingerprint" />
+      </div>
+      <div class="actions">
+        <button onclick="resetApp()">Analyze Another</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Recent Predictions</h2>
+      <ul id="historyList" class="history-list"></ul>
+    </div>
+  </div>
+
+  <script>
+    const initialRecentPredictions = {{ recent_predictions | default([]) | tojson | safe }};
+    function showMessage(text, isError = true) {
+      const node = document.getElementById("message");
+      node.style.color = isError ? "var(--danger)" : "var(--success)";
+      node.innerText = text || "";
+    }
+
+    function renderPredictionHistory(items) {
+      const list = document.getElementById("historyList");
+      list.innerHTML = "";
+      if (!items || items.length === 0) {
+        const li = document.createElement("li");
+        li.innerText = "No predictions yet.";
+        list.appendChild(li);
+        return;
+      }
+      items.forEach((item) => {
+        const li = document.createElement("li");
+        li.innerText = `${item.timestamp} | ${item.blood_group} | ${item.confidence_score.toFixed(2)}% | ${item.image_id}`;
+        list.appendChild(li);
+      });
+    }
+
+    function animateStage(stageNum) {
+      document.querySelectorAll(".stage").forEach(el => el.classList.remove("active"));
+      const stage = document.getElementById(`stage${stageNum}`);
+      if (stage) stage.classList.add("active");
+    }
+
+    function animateProgress(value) {
+      document.getElementById("progress").style.width = `${value}%`;
+    }
+
+    function sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    function showResult(result) {
+      document.getElementById("resultCard").style.display = "block";
+      document.getElementById("predictionLabel").innerText = result.blood_group;
+      document.getElementById("resultMeta").innerText = `Filename: ${result.filename}`;
+      document.getElementById("confidenceInfo").innerText = `Confidence: ${Number(result.confidence || 0).toFixed(2)}%`;
+      document.getElementById("previewImage").src = `/static/input_images/${result.filename}`;
+      document.getElementById("previewWrap").style.display = "block";
+    }
+
+    function resetApp() {
+      document.getElementById("fileInput").value = "";
+      document.getElementById("resultCard").style.display = "none";
+      document.getElementById("pipeline").classList.remove("show");
+      document.getElementById("buttonWrapper").style.display = "block";
+      document.querySelectorAll(".stage").forEach(el => el.classList.remove("active"));
+      animateProgress(0);
+      showMessage("");
+    }
+
+    async function triggerPredict() {
+      showMessage("");
+      const fileInput = document.getElementById("fileInput");
+      if (!fileInput.files || fileInput.files.length === 0) {
+        showMessage("Please select one fingerprint image.");
+        return;
+      }
+
+      const file = fileInput.files[0];
+      const ext = file.name.split(".").pop().toLowerCase();
+      const allowed = ["png", "jpg", "jpeg", "bmp", "gif"];
+      if (!allowed.includes(ext)) {
+        showMessage("Invalid file format. Use PNG, JPG, JPEG, BMP, or GIF.");
+        return;
+      }
+
+      const predictBtn = document.getElementById("predictBtn");
+      predictBtn.disabled = true;
+      predictBtn.innerText = "Processing...";
+      document.getElementById("buttonWrapper").style.display = "none";
+      document.getElementById("pipeline").classList.add("show");
+
+      try {
+        animateStage(1);
+        animateProgress(25);
+        const formData = new FormData();
+        formData.append("file", file);
+        const uploadRes = await fetch("/upload-image", { method: "POST", body: formData });
+        const uploadData = await uploadRes.json();
+        if (uploadData.error) {
+          showMessage(uploadData.error);
+          resetApp();
+          return;
+        }
+
+        animateStage(2);
+        animateProgress(50);
+        await sleep(300);
+        animateStage(3);
+        animateProgress(75);
+
+        const predRes = await fetch("/predict", { method: "POST" });
+        const predData = await predRes.json();
+        if (predData.error) {
+          showMessage(predData.error);
+          resetApp();
+          return;
+        }
+
+        animateStage(4);
+        animateProgress(100);
+        await sleep(300);
+        document.getElementById("pipeline").classList.remove("show");
+        showResult(predData);
+        renderPredictionHistory(predData.recent_predictions || []);
+        showMessage("Prediction completed successfully.", false);
+      } catch (error) {
+        showMessage(`Unexpected error: ${error.message}`);
+        resetApp();
+      } finally {
+        predictBtn.disabled = false;
+        predictBtn.innerText = "Analyze & Predict";
+      }
+    }
+
+    renderPredictionHistory(initialRecentPredictions);
+  </script>
+</body>
+</html>
