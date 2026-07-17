@@ -45,7 +45,7 @@ The project uses an EfficientNetB0 CNN model along with a Flask web application 
 - **Frontend**: HTML, CSS, JavaScript  
 - **Backend**: Flask (API + templates)  
 - **Visualization**: Matplotlib, Seaborn  
-- **Deployment**: Local demo (Docker/Render compatible)  
+- **Deployment**: Local demo (Docker/Render compatible)    
 
 ---
 
